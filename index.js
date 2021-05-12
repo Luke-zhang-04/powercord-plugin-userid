@@ -1,6 +1,41 @@
 const {Plugin} = require("powercord/entities")
 const webpack = require("powercord/webpack")
 
+let _userModule
+
+/**
+ * Get a user by id
+ * @param {string} id - user id
+ * @returns {Promise<import("./types").User>} user object
+ */
+const getUser = async (id) =>
+    await (_userModule ?? (_userModule = await webpack.getModule(["acceptAgreements", "getUser"]))) // Nullish Assignment
+        .getUser(id)
+
+/**
+ * Makes some of the default userObject properties enumerable
+ * @param {import("./types").User} userObject - default user object
+ * @returns {import("./types").User} user object with enumerable values
+ */
+const enumerateUserinfo = ({avatarURL, createdAt, hasPremiumPerks, tag, ...userObject}) => ({
+    ...userObject,
+    avatarURL,
+    createdAt,
+    hasPremiumPerks,
+    tag,
+})
+
+/** @type {<T extends {}>(obj: T) => T} */
+const sortJsonObject = (obj) => {
+    const sortedObj = {}
+
+    for (const key of Object.keys(obj).sort()) {
+        sortedObj[key] = obj[key]
+    }
+
+    return sortedObj
+}
+
 /**
  * Calculates elapsed time between current and previous
  * @param {number} current - current time
@@ -139,24 +174,20 @@ module.exports = class UserIDInfo extends Plugin {
         }
 
         try {
-            const userObject = await (
-                await webpack.getModule(["acceptAgreements", "getUser"])
-            ).getUser(id)
-            const username = `${userObject.username}#${userObject.discriminator}`
-            /** @type {string} */
+            const userObject = sortJsonObject(enumerateUserinfo(await getUser(id)))
+            const {bot: isBot, tag: username, createdAt: jsTime} = userObject
+
             const avatarURL = (
                 userObject.avatarURL.includes("assets")
                     ? `https://canary.discord.com${userObject.avatarURL}`
                     : userObject.avatarURL
             ).replace(/\?size=[0-9]+$/i, "")
-            const isBot = String(userObject.bot)
-            const unixTime = id / 4_194_304 + 1_420_070_400_000
-            const jsTime = new Date(unixTime)
+
+            const unixTime = userObject.createdAt.getTime()
             const humanTime = `${
                 jsTime.getMonth() + 1
             }/${jsTime.getDate()}/${jsTime.getFullYear()}`
-            const currentTime = Date.now()
-            const relativeTime = timeDifference(currentTime, unixTime)
+            const relativeTime = timeDifference(Date.now(), unixTime)
 
             if (shouldSend || ["md", "json", "yaml", "raw"].includes(format)) {
                 return {
@@ -200,7 +231,7 @@ module.exports = class UserIDInfo extends Plugin {
                         },
                         {
                             name: "Is Bot",
-                            value: `${isBot}`,
+                            value: isBot.toString(),
                             inline: false,
                         },
                         {
@@ -220,10 +251,7 @@ module.exports = class UserIDInfo extends Plugin {
             }
         } catch (err) {
             return {
-                result:
-                    err instanceof Error || typeof err.toString === "function"
-                        ? err.toString()
-                        : JSON.stringify(err),
+                result: err instanceof Error ? err.toString() : JSON.stringify(err),
                 send: false,
             }
         }
