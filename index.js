@@ -113,7 +113,7 @@ module.exports = class UserIDInfo extends Plugin {
             command: "userid",
             aliases: ["useridinfo", "idinfo"],
             label: "UserID Info",
-            usage: "{c} <id> [--send] [--no-tag] [--show-avatar] [--format=[default, md, json, yaml]]",
+            usage: "{c} <id> [--send] [--no-tag] [--show-avatar] [--format=[default, md, json, yaml, raw]]",
             description: "Lookup user info from a user id",
             executor: (args) => this.getInfo(args),
         })
@@ -158,58 +158,65 @@ module.exports = class UserIDInfo extends Plugin {
             const currentTime = Date.now()
             const relativeTime = timeDifference(currentTime, unixTime)
 
-            const result = shouldSend
-                ? formatResult(
-                      id,
-                      username,
-                      shouldTag ? `<@${id}>` : `@${id}`,
-                      isBot,
-                      shouldShowAvatar ? avatarURL : `<${avatarURL}>`,
-                      humanTime,
-                      relativeTime,
-                      format,
-                  )
-                : {
-                      type: "rich",
-                      title: `UserID Lookup for ${username}`,
-                      fields: [
-                          {
-                              name: "ID",
-                              value: `${id}`,
-                              inline: false,
-                          },
-                          {
-                              name: "Tag",
-                              value: `<@${id}>`,
-                              inline: false,
-                          },
-                          {
-                              name: "Username",
-                              value: username,
-                              inline: false,
-                          },
-                          {
-                              name: "Is Bot",
-                              value: `${isBot}`,
-                              inline: false,
-                          },
-                          {
-                              name: "Avatar",
-                              value: avatarURL,
-                              inline: false,
-                          },
-                          {
-                              name: "Created",
-                              value: humanTime + " (" + relativeTime + ")",
-                              inline: false,
-                          },
-                      ],
-                  }
+            if (shouldSend || ["md", "json", "yaml", "raw"].includes(format)) {
+                return {
+                    result:
+                        format === "raw"
+                            ? `\`\`\`json\n${JSON.stringify(userObject, null, 2)}\n\`\`\``
+                            : formatResult(
+                                  id,
+                                  username,
+                                  shouldTag ? `<@${id}>` : `@${id}`,
+                                  isBot,
+                                  shouldShowAvatar ? avatarURL : `<${avatarURL}>`,
+                                  humanTime,
+                                  relativeTime,
+                                  format,
+                              ),
+                    embed: false,
+                    send: shouldSend,
+                }
+            }
 
             return {
-                result,
-                embed: !shouldSend,
-                send: shouldSend,
+                result: {
+                    type: "rich",
+                    title: `UserID Lookup for ${username}`,
+                    fields: [
+                        {
+                            name: "ID",
+                            value: `${id}`,
+                            inline: false,
+                        },
+                        {
+                            name: "Tag",
+                            value: `<@${id}>`,
+                            inline: false,
+                        },
+                        {
+                            name: "Username",
+                            value: username,
+                            inline: false,
+                        },
+                        {
+                            name: "Is Bot",
+                            value: `${isBot}`,
+                            inline: false,
+                        },
+                        {
+                            name: "Avatar",
+                            value: avatarURL,
+                            inline: false,
+                        },
+                        {
+                            name: "Created",
+                            value: humanTime + " (" + relativeTime + ")",
+                            inline: false,
+                        },
+                    ],
+                },
+                send: false,
+                embed: true,
             }
         } catch (err) {
             return {
